@@ -41,8 +41,15 @@ export default function renderHTML(options: Options) {
     if (options.hideOriginal) {
       // Hide the original node's background
       node.style({
-        "background-opacity": 0,  // Hides the background
-        "label": "",              // Hides the text label
+        "background-opacity": 0,
+        "label": "",
+        'text-background-opacity': 0, // Crucial:  Make the label's background transparent
+        'text-background-padding': '0px',
+        'border-width': '0px',
+        'border-color': 'transparent',
+        'padding': '0px',         // Remove any padding around the node itself
+        'text-border-width': '0px',
+        'text-border-color': 'transparent'
       });
     }
   };
