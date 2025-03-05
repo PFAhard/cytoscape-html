@@ -1,76 +1,102 @@
 import cytoscape from "cytoscape";
 
-interface Options {
-  hideOriginal: Boolean;
+interface HTMLLabelOptions {
+  hideOriginal?: boolean;
+  nodeClass?: string;
+  width?: number;
+  height?: number;
 }
 
-export default function renderHTML(options: Options) {
-  const cyto = this.cy();
-  const cytoContainer = cyto.container();
-  const nodeHtmlContainer = document.createElement("div");
-  const internalId = "__cytoscape-html__";
+export default function renderHTML(options: HTMLLabelOptions = { 
+  hideOriginal: true,
+  nodeClass: 'cy-node-html',
+  width: 40,
+  height: 40
+}) {
+  const cy = this.cy();
+  const container = cy.container();
+  const labelContainer = document.createElement('div');
+  const containerId = '__cytoscape-html-labels__';
 
-  const createNode = (node: any) => {
+  // Initialize container
+  if (!document.getElementById(containerId)) {
+    labelContainer.id = containerId;
+    labelContainer.style.position = 'absolute';
+    labelContainer.style.left = '0';
+    labelContainer.style.top = '0';
+    labelContainer.style.width = '100%';
+    labelContainer.style.height = '100%';
+    labelContainer.style.overflow = 'hidden';
+    labelContainer.style.zIndex = '10';
+    container.appendChild(labelContainer);
+  }
+
+  const updateNode = (node: cytoscape.NodeSingular) => {
     const id = node.id();
-    const html = node.data()?.html;
-
+    const html = node.data('html');
     if (!html) return;
 
-    const namespace = "__cytoscape-html";
-    const internalNodeId = `${namespace}_node-${id}`;
-    const position = node.renderedPosition();
-    const posX = position.x.toFixed(2);
-    const posY = position.y.toFixed(2);
+    const labelId = `__cy_label_${id}`;
+    let labelDiv = document.getElementById(labelId);
 
-    const newNode = document.createElement("div");
-    const existingNode = nodeHtmlContainer.querySelector("#" + internalNodeId);
-    const nodeTranslation = `translate(${posX}px, ${posY}px)`;
-    const nodeScale = `scale(${cyto.zoom()})`;
-    const transform = `translate(-50%, -50%) ${nodeTranslation} ${nodeScale}`;
+    if (!labelDiv) {
+      labelDiv = document.createElement('div');
+      labelDiv.id = labelId;
+      labelDiv.className = options.nodeClass;
+      labelDiv.style.position = 'absolute';
+      labelDiv.style.transformOrigin = 'center';
+      labelDiv.style.width = `${options.width}px`;
+      labelDiv.style.height = `${options.height}px`;
+      labelDiv.style.display = 'flex';
+      labelDiv.style.alignItems = 'center';
+      labelDiv.style.justifyContent = 'center';
+      labelDiv.style.cursor = 'pointer';
+      labelContainer.appendChild(labelDiv);
 
-    newNode.id = internalNodeId;
-    newNode.style.position = "absolute";
-    newNode.style.transform = transform;
-    newNode.style.zIndex = "2";
-    newNode.innerHTML = html;
+      // Make the div interactive
+      labelDiv.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        node.trigger('mousedown');
+      });
+      
+      labelDiv.addEventListener('mouseover', () => node.trigger('mouseover'));
+      labelDiv.addEventListener('mouseout', () => node.trigger('mouseout'));
+    }
 
-    if (existingNode) nodeHtmlContainer.removeChild(existingNode);
-
-    nodeHtmlContainer.appendChild(newNode);
+    const pos = node.renderedPosition();
+    const zoom = cy.zoom();
+    
+    labelDiv.innerHTML = html;
+    labelDiv.style.transform = `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px) scale(${zoom})`;
 
     if (options.hideOriginal) {
-      // Hide the original node's background
       node.style({
-        "background-opacity": 0,
-        "label": "",
-        'text-background-opacity': 0, // Crucial:  Make the label's background transparent
-        'text-background-padding': '0px',
-        'border-width': '0px',
-        'border-color': 'transparent',
-        'padding': '0px',         // Remove any padding around the node itself
-        'text-border-width': '0px',
-        'text-border-color': 'transparent'
+        'width': options.width,
+        'height': options.height,
+        'background-opacity': 0.15,  // Keep a slight background for better interaction
+        'border-width': 1,
+        'border-opacity': 0.2,
+        'label': ''
       });
     }
   };
 
-  function handleMovement() {
-    cyto.nodes().forEach((node) => createNode(node));
-  }
+  // Event handlers
+  const updateAll = () => this.forEach(updateNode);
+  const removeNode = (node: cytoscape.NodeSingular) => {
+    const labelDiv = document.getElementById(`__cy_label_${node.id()}`);
+    if (labelDiv) labelContainer.removeChild(labelDiv);
+  };
 
-  if (!document.getElementById(internalId)) {
-    const canvas = cytoContainer.querySelector("canvas");
+  // Register events
+  cy.on('add', 'node', e => updateNode(e.target));
+  cy.on('remove', 'node', e => removeNode(e.target));
+  cy.on('position', 'node', e => updateNode(e.target));
+  cy.on('pan zoom resize', updateAll);
+  cy.on('drag', 'node', e => updateNode(e.target));
 
-    nodeHtmlContainer.id = internalId;
-    canvas.parentNode.appendChild(nodeHtmlContainer);
-    nodeHtmlContainer.style.width = canvas.style.width;
-    nodeHtmlContainer.style.height = canvas.style.height;
-    nodeHtmlContainer.style.zIndex = "1";
+  // Initial render
+  updateAll();
 
-    cyto.on("add", "node", (e: cytoscape.EventObject) => createNode(e.target));
-    cyto.on("drag", "node", (e: cytoscape.EventObject) => createNode(e.target));
-    cyto.on("pan resize", handleMovement);
-  }
-
-  return cyto.nodes();
+  return this;
 }
